@@ -24,9 +24,13 @@ Then run: `docker-compose up`
 
 ## 🔧 Option 2: Build from Source
 
-### Prerequisites
-- Docker
-- Docker Compose
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/truongginjs/speech-to-text-service.git
+   cd speech-to-text-service
+   ```
+
+2. **Build and run**:
 
 ### Setup and Run
 

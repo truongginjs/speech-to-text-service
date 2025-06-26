@@ -40,9 +40,10 @@ If you get "exec format error", see [`PLATFORM_FIX.md`](PLATFORM_FIX.md) for sol
 
 ### Installation & Running
 
-1. **Clone and navigate to the project directory**:
+1. **Clone the repository**:
    ```bash
-   cd /path/to/stt
+   git clone https://github.com/truongginjs/speech-to-text-service.git
+   cd speech-to-text-service
    ```
 
 2. **Build and run with Docker Compose**:
