@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎤 Voice Recorder & STT</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .language-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        select {
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .record-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            font-size: 48px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .record-button.ready {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            color: white;
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
+        }
+
+        .record-button.recording {
+            background: linear-gradient(45deg, #ff4757, #c44569);
+            animation: pulse 1.5s infinite;
+        }
+
+        .record-button.processing {
+            background: linear-gradient(45deg, #ffa726, #ff9800);
+        }
+
+        .record-button:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .record-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .status.ready { background: #e8f5e8; color: #2e7d2e; }
+        .status.recording { background: #fff3e0; color: #f57c00; }
+        .status.processing { background: #e3f2fd; color: #1976d2; }
+        .status.error { background: #ffebee; color: #d32f2f; }
+
+        .transcript-container {
+            margin-top: 30px;
+        }
+
+        .transcript {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 20px;
+            min-height: 120px;
+            max-height: 300px;
+            overflow-y: auto;
+            text-align: left;
+            line-height: 1.6;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .transcript.empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-style: italic;
+        }
+
+        .transcript-text {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .confidence {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn.primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn.secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e9ecef;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .audio-visualizer {
+            width: 100%;
+            height: 60px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+            display: none;
+        }
+
+        .audio-visualizer.active {
+            display: block;
+        }
+
+        .wave-bars {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 2px;
+        }
+
+        .wave-bar {
+            width: 3px;
+            background: #667eea;
+            border-radius: 2px;
+            transition: height 0.1s;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .record-button {
+                width: 100px;
+                height: 100px;
+                font-size: 40px;
+            }
+            
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Voice Recorder</h1>
+        <p class="subtitle">Record your voice and get instant transcription</p>
+
+        <div class="controls">
+            <div class="language-selector">
+                <label for="language">Language:</label>
+                <select id="language">
+                    <option value="en">🇺🇸 English</option>
+                    <option value="vi">🇻🇳 Vietnamese</option>
+                </select>
+            </div>
+
+            <button id="recordBtn" class="record-button ready">
+                🎤
+            </button>
+
+            <div class="audio-visualizer" id="visualizer">
+                <div class="wave-bars" id="waveBars"></div>
+            </div>
+
+            <div id="status" class="status ready">
+                🟢 Ready to record - Click the microphone button
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div id="recordingTime" class="stat-value">0s</div>
+                <div class="stat-label">Recording Time</div>
+            </div>
+            <div class="stat">
+                <div id="transcriptCount" class="stat-value">0</div>
+                <div class="stat-label">Transcripts</div>
+            </div>
+        </div>
+
+        <div class="transcript-container">
+            <h3>📝 Transcription</h3>
+            <div id="transcript" class="transcript empty">
+                Your transcribed text will appear here...
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="clearBtn" class="btn secondary">🗑️ Clear</button>
+            <button id="downloadBtn" class="btn secondary">💾 Download</button>
+            <a href="/docs" class="btn primary" target="_blank">📚 API Docs</a>
+        </div>
+    </div>
+
+    <script>
+        class VoiceRecorder {
+            constructor() {
+                this.isRecording = false;
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.recordingStartTime = null;
+                this.recordingTimer = null;
+                this.transcriptCount = 0;
+                this.audioContext = null;
+                this.analyser = null;
+                this.microphone = null;
+                this.animationId = null;
+
+                this.initializeElements();
+                this.setupEventListeners();
+                this.checkMicrophonePermission();
+                this.initializeVisualizer();
+            }
+
+            initializeElements() {
+                this.recordBtn = document.getElementById('recordBtn');
+                this.statusDiv = document.getElementById('status');
+                this.transcriptDiv = document.getElementById('transcript');
+                this.languageSelect = document.getElementById('language');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.downloadBtn = document.getElementById('downloadBtn');
+                this.recordingTimeSpan = document.getElementById('recordingTime');
+                this.transcriptCountSpan = document.getElementById('transcriptCount');
+                this.visualizer = document.getElementById('visualizer');
+                this.waveBars = document.getElementById('waveBars');
+            }
+
+            setupEventListeners() {
+                this.recordBtn.addEventListener('click', () => this.toggleRecording());
+                this.clearBtn.addEventListener('click', () => this.clearTranscript());
+                this.downloadBtn.addEventListener('click', () => this.downloadTranscript());
+                
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space' && !e.target.matches('input, textarea, select')) {
+                        e.preventDefault();
+                        this.toggleRecording();
+                    }
+                    if (e.key === 'Escape') {
+                        this.stopRecording();
+                    }
+                });
+            }
+
+            async checkMicrophonePermission() {
+                try {
+                    await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.updateStatus('🟢 Ready to record - Click the microphone button', 'ready');
+                } catch (error) {
+                    this.updateStatus('❌ Microphone permission denied', 'error');
+                    this.recordBtn.disabled = true;
+                }
+            }
+
+            initializeVisualizer() {
+                // Create wave bars for visualizer
+                for (let i = 0; i < 20; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'wave-bar';
+                    bar.style.height = '10px';
+                    this.waveBars.appendChild(bar);
+                }
+            }
+
+            async toggleRecording() {
+                if (this.isRecording) {
+                    await this.stopRecording();
+                } else {
+                    await this.startRecording();
+                }
+            }
+
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: 16000,
+                            channelCount: 1,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+
+                    this.setupAudioAnalyser(stream);
+
+                    this.mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'audio/webm;codecs=opus'
+                    });
+
+                    this.audioChunks = [];
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        this.processRecording();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    this.recordingStartTime = Date.now();
+
+                    this.updateUI('recording');
+                    this.startTimer();
+                    this.startVisualizer();
+
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    this.updateStatus('❌ Failed to start recording', 'error');
+                }
+            }
+
+            setupAudioAnalyser(stream) {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                this.microphone = this.audioContext.createMediaStreamSource(stream);
+                
+                this.analyser.fftSize = 256;
+                this.microphone.connect(this.analyser);
+            }
+
+            startVisualizer() {
+                this.visualizer.classList.add('active');
+                const bars = this.waveBars.querySelectorAll('.wave-bar');
+                const bufferLength = this.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                const animate = () => {
+                    if (!this.isRecording) return;
+
+                    this.analyser.getByteFrequencyData(dataArray);
+                    
+                    bars.forEach((bar, i) => {
+                        const value = dataArray[i * 4] || 0;
+                        const height = (value / 255) * 50 + 5;
+                        bar.style.height = `${height}px`;
+                    });
+
+                    this.animationId = requestAnimationFrame(animate);
+                };
+
+                animate();
+            }
+
+            async stopRecording() {
+                if (!this.isRecording) return;
+
+                this.isRecording = false;
+                this.mediaRecorder.stop();
+                this.stopTimer();
+                this.stopVisualizer();
+                this.updateUI('processing');
+            }
+
+            stopVisualizer() {
+                this.visualizer.classList.remove('active');
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                }
+                if (this.audioContext) {
+                    this.audioContext.close();
+                }
+            }
+
+            async processRecording() {
+                try {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    const formData = new FormData();
+                    formData.append('file', audioBlob, 'recording.webm');
+                    formData.append('language', this.languageSelect.value);
+
+                    const response = await fetch('/transcribe', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success && result.text) {
+                        this.addTranscription(result.text, result.confidence, result.language);
+                        this.updateStatus('✅ Transcription completed', 'ready');
+                    } else {
+                        this.updateStatus(`❌ Transcription failed: ${result.error || 'Unknown error'}`, 'error');
+                    }
+
+                } catch (error) {
+                    console.error('Error processing recording:', error);
+                    this.updateStatus('❌ Failed to process recording', 'error');
+                }
+
+                this.updateUI('ready');
+            }
+
+            addTranscription(text, confidence, language) {
+                if (this.transcriptDiv.classList.contains('empty')) {
+                    this.transcriptDiv.classList.remove('empty');
+                    this.transcriptDiv.innerHTML = '';
+                }
+
+                const transcriptElement = document.createElement('div');
+                transcriptElement.className = 'transcript-text';
+                
+                const languageFlag = language === 'vi' ? '🇻🇳' : '🇺🇸';
+                const timestamp = new Date().toLocaleTimeString();
+                
+                transcriptElement.innerHTML = `
+                    <div><strong>${languageFlag} ${timestamp}:</strong> ${text}</div>
+                    <div class="confidence">Confidence: ${Math.round(confidence * 100)}%</div>
+                `;
+
+                this.transcriptDiv.appendChild(transcriptElement);
+                this.transcriptDiv.scrollTop = this.transcriptDiv.scrollHeight;
+
+                this.transcriptCount++;
+                this.transcriptCountSpan.textContent = this.transcriptCount;
+            }
+
+            clearTranscript() {
+                this.transcriptDiv.innerHTML = 'Your transcribed text will appear here...';
+                this.transcriptDiv.classList.add('empty');
+                this.transcriptCount = 0;
+                this.transcriptCountSpan.textContent = '0';
+            }
+
+            downloadTranscript() {
+                const transcripts = this.transcriptDiv.querySelectorAll('.transcript-text');
+                if (transcripts.length === 0) {
+                    alert('No transcriptions to download');
+                    return;
+                }
+
+                let content = 'Voice Transcriptions\n';
+                content += '==================\n\n';
+
+                transcripts.forEach(transcript => {
+                    content += transcript.textContent.trim() + '\n\n';
+                });
+
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `transcription_${new Date().toISOString().slice(0, 19)}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            updateUI(state) {
+                this.recordBtn.className = `record-button ${state}`;
+                
+                switch (state) {
+                    case 'ready':
+                        this.recordBtn.innerHTML = '🎤';
+                        this.recordBtn.disabled = false;
+                        break;
+                    case 'recording':
+                        this.recordBtn.innerHTML = '⏹️';
+                        this.recordBtn.disabled = false;
+                        break;
+                    case 'processing':
+                        this.recordBtn.innerHTML = '⏳';
+                        this.recordBtn.disabled = true;
+                        break;
+                }
+            }
+
+            updateStatus(message, className) {
+                this.statusDiv.textContent = message;
+                this.statusDiv.className = `status ${className}`;
+            }
+
+            startTimer() {
+                this.recordingTimer = setInterval(() => {
+                    if (this.recordingStartTime) {
+                        const elapsed = Math.floor((Date.now() - this.recordingStartTime) / 1000);
+                        this.recordingTimeSpan.textContent = `${elapsed}s`;
+                        
+                        if (elapsed === 1) {
+                            this.updateStatus('🔴 Recording... (Click again to stop)', 'recording');
+                        }
+                    }
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.recordingTimer) {
+                    clearInterval(this.recordingTimer);
+                    this.recordingTimer = null;
+                }
+                this.recordingStartTime = null;
+                this.recordingTimeSpan.textContent = '0s';
+            }
+        }
+
+        // Initialize the voice recorder when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new VoiceRecorder();
+        });
+
+        // Add some helpful tips
+        console.log('🎤 Voice Recorder Tips:');
+        console.log('• Press SPACEBAR to start/stop recording');
+        console.log('• Press ESCAPE to stop recording');
+        console.log('• Make sure your microphone is connected and working');
+        console.log('• Speak clearly for better transcription accuracy');
+    </script>
+</body>
+</html>

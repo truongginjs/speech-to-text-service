@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-time Speech Recognition with VOSK</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background: #f0f0f0;
+        }
+        .container { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls { 
+            margin: 20px 0; 
+            padding: 20px; 
+            background: #f8f9fa; 
+            border-radius: 8px;
+        }
+        button { 
+            padding: 12px 20px; 
+            margin: 5px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .start-btn { background: #28a745; color: white; }
+        .start-btn:hover { background: #218838; }
+        .start-btn:disabled { background: #6c757d; cursor: not-allowed; }
+        .stop-btn { background: #dc3545; color: white; }
+        .stop-btn:hover { background: #c82333; }
+        .stop-btn:disabled { background: #6c757d; cursor: not-allowed; }
+        select { 
+            padding: 10px; 
+            margin: 5px; 
+            border-radius: 5px; 
+            border: 1px solid #ddd; 
+            font-size: 16px;
+        }
+        .status { 
+            padding: 15px; 
+            margin: 15px 0; 
+            border-radius: 5px; 
+            font-weight: bold;
+        }
+        .status.connecting { background: #fff3cd; color: #856404; }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.recording { background: #cce5ff; color: #004085; }
+        .transcript { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 8px; 
+            min-height: 200px; 
+            border: 2px solid #dee2e6;
+            margin: 20px 0;
+            font-size: 18px;
+            line-height: 1.6;
+        }
+        .partial { color: #6c757d; font-style: italic; }
+        .final { color: #212529; }
+        .stats { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr 1fr; 
+            gap: 15px; 
+            margin: 20px 0;
+        }
+        .stat-box { 
+            background: #e9ecef; 
+            padding: 15px; 
+            border-radius: 8px; 
+            text-align: center;
+        }
+        .stat-value { font-size: 24px; font-weight: bold; color: #495057; }
+        .stat-label { font-size: 14px; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Real-time Speech Recognition</h1>
+        <p>This example demonstrates real-time speech recognition using VOSK WebSocket API.</p>
+        
+        <div class="controls">
+            <label for="language">Language:</label>
+            <select id="language">
+                <option value="en">English</option>
+                <option value="vi">Vietnamese</option>
+            </select>
+            
+            <button id="startBtn" class="start-btn">🎤 Start Recording</button>
+            <button id="stopBtn" class="stop-btn" disabled>⏹️ Stop Recording</button>
+            <button id="clearBtn">🗑️ Clear Transcript</button>
+        </div>
+        
+        <div id="status" class="status">Ready to start</div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div id="connectionTime" class="stat-value">--</div>
+                <div class="stat-label">Connection Time (ms)</div>
+            </div>
+            <div class="stat-box">
+                <div id="wordsCount" class="stat-value">0</div>
+                <div class="stat-label">Words Recognized</div>
+            </div>
+            <div class="stat-box">
+                <div id="recordingTime" class="stat-value">0s</div>
+                <div class="stat-label">Recording Duration</div>
+            </div>
+        </div>
+        
+        <div class="transcript" id="transcript">
+            <div style="text-align: center; color: #6c757d;">
+                Transcript will appear here...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket and MediaRecorder variables
+        let websocket = null;
+        let mediaRecorder = null;
+        let recordingStartTime = null;
+        let connectionStartTime = null;
+        let wordsCount = 0;
+        let recordingInterval = null;
+        
+        // DOM elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const languageSelect = document.getElementById('language');
+        const statusDiv = document.getElementById('status');
+        const transcriptDiv = document.getElementById('transcript');
+        const connectionTimeSpan = document.getElementById('connectionTime');
+        const wordsCountSpan = document.getElementById('wordsCount');
+        const recordingTimeSpan = document.getElementById('recordingTime');
+        
+        // Utility functions
+        function updateStatus(message, className = '') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${className}`;
+        }
+        
+        function addToTranscript(text, isPartial = false) {
+            if (isPartial) {
+                // Remove previous partial results
+                const partials = transcriptDiv.querySelectorAll('.partial');
+                partials.forEach(p => p.remove());
+                
+                if (text.trim()) {
+                    const span = document.createElement('span');
+                    span.className = 'partial';
+                    span.textContent = ` ${text}`;
+                    transcriptDiv.appendChild(span);
+                }
+            } else {
+                // Remove partial results and add final text
+                const partials = transcriptDiv.querySelectorAll('.partial');
+                partials.forEach(p => p.remove());
+                
+                if (text.trim()) {
+                    const span = document.createElement('span');
+                    span.className = 'final';
+                    span.textContent = ` ${text}`;
+                    transcriptDiv.appendChild(span);
+                    
+                    // Update word count
+                    wordsCount += text.trim().split(/\s+/).filter(word => word.length > 0).length;
+                    wordsCountSpan.textContent = wordsCount;
+                }
+            }
+            
+            // Auto-scroll to bottom
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+        }
+        
+        function updateRecordingTime() {
+            if (recordingStartTime) {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                recordingTimeSpan.textContent = `${elapsed}s`;
+            }
+        }
+        
+        function resetStats() {
+            wordsCount = 0;
+            wordsCountSpan.textContent = '0';
+            recordingTimeSpan.textContent = '0s';
+            connectionTimeSpan.textContent = '--';
+        }
+        
+        // WebSocket connection
+        async function connectWebSocket() {
+            const language = languageSelect.value;
+            const wsUrl = `ws://localhost:8000/ws/${language}`;
+            
+            connectionStartTime = Date.now();
+            updateStatus('Connecting to server...', 'connecting');
+            
+            try {
+                websocket = new WebSocket(wsUrl);
+                
+                websocket.onopen = () => {
+                    const connectionTime = Date.now() - connectionStartTime;
+                    connectionTimeSpan.textContent = connectionTime;
+                    updateStatus('Connected! Starting recording...', 'connected');
+                    startRecording();
+                };
+                
+                websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.text) {
+                            addToTranscript(data.text, false);
+                        } else if (data.partial) {
+                            addToTranscript(data.partial, true);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                    }
+                };
+                
+                websocket.onclose = (event) => {
+                    if (event.code !== 1000) {
+                        updateStatus(`Connection closed: ${event.reason}`, 'error');
+                    } else {
+                        updateStatus('Connection closed', '');
+                    }
+                    stopRecording();
+                };
+                
+                websocket.onerror = (error) => {
+                    updateStatus('Connection error. Check if service is running.', 'error');
+                    console.error('WebSocket error:', error);
+                    stopRecording();
+                };
+                
+            } catch (error) {
+                updateStatus('Failed to connect to server', 'error');
+                console.error('Connection error:', error);
+            }
+        }
+        
+        // Audio recording
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (websocket && websocket.readyState === WebSocket.OPEN && event.data.size > 0) {
+                        websocket.send(event.data);
+                    }
+                };
+                
+                mediaRecorder.onerror = (event) => {
+                    updateStatus('Recording error', 'error');
+                    console.error('MediaRecorder error:', event);
+                };
+                
+                recordingStartTime = Date.now();
+                mediaRecorder.start(250); // Send data every 250ms
+                
+                updateStatus('🎤 Recording... Speak now!', 'recording');
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+                // Update recording time every second
+                recordingInterval = setInterval(updateRecordingTime, 1000);
+                
+            } catch (error) {
+                updateStatus('Microphone access denied or error', 'error');
+                console.error('getUserMedia error:', error);
+            }
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (websocket) {
+                websocket.close(1000, 'User stopped recording');
+                websocket = null;
+            }
+            
+            if (recordingInterval) {
+                clearInterval(recordingInterval);
+                recordingInterval = null;
+            }
+            
+            updateStatus('Recording stopped', '');
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            recordingStartTime = null;
+        }
+        
+        function clearTranscript() {
+            transcriptDiv.innerHTML = '<div style="text-align: center; color: #6c757d;">Transcript cleared...</div>';
+            resetStats();
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', () => {
+            resetStats();
+            connectWebSocket();
+        });
+        
+        stopBtn.addEventListener('click', stopRecording);
+        clearBtn.addEventListener('click', clearTranscript);
+        
+        // Check browser compatibility
+        window.addEventListener('load', () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                updateStatus('Your browser does not support audio recording', 'error');
+                startBtn.disabled = true;
+            }
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopRecording();
+        });
+    </script>
+</body>
+</html>
